@@ -1,24 +1,36 @@
-#include <rthw.h>
+/*
+ * Copyright (c) 2006-2022, RT-Thread Development Team
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 #include <unistd.h>
 #include <fcntl.h>
 
 #include "libfdt/libfdt.h"
-#include "fdt.h"
+#include "dtb_node.h"
 
-extern rt_err_t fdt_exec_status;
+#include <stdio.h>
+#include <string.h>
+#include <stdbool.h>
+#include <stdlib.h>
 
-rt_inline rt_bool_t fdt_check(void *fdt)
+#define RT_TRUE     true
+#define RT_FALSE    false
+
+extern int fdt_exec_status;
+
+bool dtb_node_check(void *fdt)
 {
     return fdt_check_header(fdt) == 0 ? RT_TRUE : RT_FALSE;
 }
 
-void *fdt_load_from_fs(char *dtb_filename)
+void *dtb_node_load_from_fs(char *dtb_filename)
 {
-    void *fdt = RT_NULL;
-    rt_size_t dtb_sz;
+    void *fdt = NULL;
+    size_t dtb_sz;
     int fd = -1;
 
-    if (dtb_filename == RT_NULL)
+    if (dtb_filename == NULL)
     {
         fdt_exec_status = FDT_RET_GET_EMPTY;
         goto end;
@@ -28,7 +40,7 @@ void *fdt_load_from_fs(char *dtb_filename)
 
     if (fd == -1)
     {
-        rt_kprintf("File `%s' not found.\n", dtb_filename);
+        printf("File `%s' not found.\n", dtb_filename);
         fdt_exec_status = FDT_RET_GET_EMPTY;
         goto end;
     }
@@ -37,18 +49,18 @@ void *fdt_load_from_fs(char *dtb_filename)
 
     if (dtb_sz > 0)
     {
-        if ((fdt = (struct fdt_header *)rt_malloc(sizeof(rt_uint8_t) * dtb_sz)) == RT_NULL)
+        if ((fdt = (struct fdt_header *)malloc(sizeof(uint8_t) * dtb_sz)) == NULL)
         {
             fdt_exec_status = FDT_RET_NO_MEMORY;
             goto end;
         }
 
         lseek(fd, 0, SEEK_SET);
-        read(fd, fdt, sizeof(rt_uint8_t) * dtb_sz);
+        read(fd, fdt, sizeof(uint8_t) * dtb_sz);
 
-        if (fdt_check(fdt) == RT_FALSE)
+        if (dtb_node_check(fdt) == RT_FALSE)
         {
-            rt_free(fdt);
+            free(fdt);
         }
     }
 
@@ -61,31 +73,31 @@ end:
     return fdt;
 }
 
-void *fdt_load_from_memory(void *dtb_ptr, rt_bool_t is_clone)
+void *dtb_node_load_from_memory(void *dtb_ptr, bool is_clone)
 {
-    void *fdt = RT_NULL;
+    void *fdt = NULL;
 
-    if (dtb_ptr == RT_NULL)
+    if (dtb_ptr == NULL)
     {
         fdt_exec_status = FDT_RET_GET_EMPTY;
         goto end;
     }
 
-    if (fdt_check(dtb_ptr) == RT_FALSE)
+    if (dtb_node_check(dtb_ptr) == RT_FALSE)
     {
         fdt_exec_status = FDT_RET_GET_EMPTY;
-        fdt = RT_NULL;
+        fdt = NULL;
         goto end;
     }
 
     if (is_clone)
     {
-        rt_size_t dtb_sz = fdt_totalsize(dtb_ptr);
+        size_t dtb_sz = fdt_totalsize(dtb_ptr);
         if (dtb_sz > 0)
         {
-            if ((fdt = rt_malloc(dtb_sz)) != RT_NULL)
+            if ((fdt = malloc(dtb_sz)) != NULL)
             {
-                rt_memcpy(fdt, dtb_ptr, dtb_sz);
+                memcpy(fdt, dtb_ptr, dtb_sz);
             }
             else
             {

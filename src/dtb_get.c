@@ -1,25 +1,39 @@
+/*
+ * Copyright (c) 2006-2022, RT-Thread Development Team
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 #include "libfdt/libfdt.h"
-#include "fdt.h"
+#include "dtb_node.h"
+#include "dtb_head.h"
+
+#include <stdio.h>
+#include <string.h>
+#include <stdbool.h>
+#include <stdlib.h>
+
+#define RT_TRUE     true
+#define RT_FALSE    false
 
 static struct
 {
     const char *ptr;
     const char *end;
     char *cur;
-} paths_buf = {RT_NULL, RT_NULL};
+} paths_buf = {NULL, NULL};
 static void *current_fdt;
 
-rt_err_t fdt_exec_status = FDT_RET_GET_OK;
+int fdt_exec_status = FDT_RET_GET_OK;
 
-rt_err_t fdt_get_exec_status()
+int dtb_node_get_exec_status()
 {
     return fdt_exec_status;
 }
 
-static rt_err_t _fdt_get_dtb_properties_list(struct dtb_property *dtb_property, rt_off_t node_off)
+static int _dtb_node_get_dtb_properties_list(struct dtb_property *dtb_property, off_t node_off)
 {
     /* caller alrealy checked current_fdt */
-    rt_off_t property_off = fdt_first_property_offset(current_fdt, node_off);
+    off_t property_off = fdt_first_property_offset(current_fdt, node_off);
     struct fdt_property *fdt_property;
 
     if (property_off < 0)
@@ -30,7 +44,7 @@ static rt_err_t _fdt_get_dtb_properties_list(struct dtb_property *dtb_property, 
     for (;;)
     {
         fdt_property = (struct fdt_property *)fdt_get_property_by_offset(current_fdt, property_off, &dtb_property->size);
-        if (fdt_property != RT_NULL)
+        if (fdt_property != NULL)
         {
             dtb_property->name = fdt_string(current_fdt, fdt32_to_cpu(fdt_property->nameoff));
             dtb_property->value = fdt_property->data;
@@ -40,8 +54,8 @@ static rt_err_t _fdt_get_dtb_properties_list(struct dtb_property *dtb_property, 
         property_off = fdt_next_property_offset(current_fdt, property_off);
         if (property_off >= 0)
         {
-            dtb_property->next = (struct dtb_property *)rt_malloc(sizeof(struct dtb_property));
-            if (dtb_property->next == RT_NULL)
+            dtb_property->next = (struct dtb_property *)malloc(sizeof(struct dtb_property));
+            if (dtb_property->next == NULL)
             {
                 return FDT_RET_NO_MEMORY;
             }
@@ -49,7 +63,7 @@ static rt_err_t _fdt_get_dtb_properties_list(struct dtb_property *dtb_property, 
         }
         else
         {
-            dtb_property->next = RT_NULL;
+            dtb_property->next = NULL;
             break;
         }
     }
@@ -57,17 +71,17 @@ static rt_err_t _fdt_get_dtb_properties_list(struct dtb_property *dtb_property, 
     return FDT_RET_GET_OK;
 }
 
-static rt_err_t _fdt_get_dtb_nodes_list(struct dtb_node *dtb_node_head, struct dtb_node *dtb_node, const char *pathname)
+static int _dtb_node_get_dtb_nodes_list(struct dtb_node *dtb_node_head, struct dtb_node *dtb_node, const char *pathname)
 {
-    rt_off_t root_off;
-    rt_off_t node_off;
+    off_t root_off;
+    off_t node_off;
     int pathname_sz;
     int node_name_sz;
 
     /* caller alrealy checked current_fdt */
     if ((root_off = fdt_path_offset(current_fdt, pathname)) >= 0)
     {
-        pathname_sz = rt_strlen(pathname);
+        pathname_sz = strlen(pathname);
         node_off = fdt_first_subnode(current_fdt, root_off);
 
         if (node_off < 0)
@@ -78,52 +92,52 @@ static rt_err_t _fdt_get_dtb_nodes_list(struct dtb_node *dtb_node_head, struct d
         for (;;)
         {
             dtb_node->parent = dtb_node_head;
-            dtb_node->sibling = RT_NULL;
+            dtb_node->sibling = NULL;
             dtb_node->name = fdt_get_name(current_fdt, node_off, &node_name_sz);
 
             /* parent_path + name + '/' + '\0' */
             if (paths_buf.cur + pathname_sz + node_name_sz + 2 < paths_buf.end)
             {
                 dtb_node->path = (const char *)paths_buf.cur;
-                rt_strncpy(paths_buf.cur, pathname, pathname_sz);
+                strncpy(paths_buf.cur, pathname, pathname_sz);
                 paths_buf.cur += pathname_sz;
-                rt_strncpy(paths_buf.cur, (char *)dtb_node->name, node_name_sz);
+                strncpy(paths_buf.cur, (char *)dtb_node->name, node_name_sz);
                 paths_buf.cur += node_name_sz;
                 *paths_buf.cur++ = '/';
                 *paths_buf.cur++ = '\0';
             }
             else
             {
-                dtb_node->path = RT_NULL;
-                rt_kprintf("\033[31m\rERROR: `FDT_DTB_ALL_NODES_PATH_SIZE' = %d bytes is configured too low.\033[0m\n", FDT_DTB_ALL_NODES_PATH_SIZE);
+                dtb_node->path = NULL;
+                printf("\033[31m\rERROR: `FDT_DTB_ALL_NODES_PATH_SIZE' = %d bytes is configured too low.\033[0m\n", FDT_DTB_ALL_NODES_PATH_SIZE);
                 return FDT_RET_NO_MEMORY;
             }
 
             dtb_node->handle = fdt_get_phandle(current_fdt, node_off);
-            dtb_node->properties = (struct dtb_property *)rt_malloc(sizeof(struct dtb_property));
-            dtb_node->child = (struct dtb_node *)rt_malloc(sizeof(struct dtb_node));
+            dtb_node->properties = (struct dtb_property *)malloc(sizeof(struct dtb_property));
+            dtb_node->child = (struct dtb_node *)malloc(sizeof(struct dtb_node));
 
-            if (dtb_node->properties == RT_NULL || dtb_node->child == RT_NULL)
+            if (dtb_node->properties == NULL || dtb_node->child == NULL)
             {
                 return FDT_RET_NO_MEMORY;
             }
 
-            fdt_exec_status = _fdt_get_dtb_properties_list(dtb_node->properties, node_off);
+            fdt_exec_status = _dtb_node_get_dtb_properties_list(dtb_node->properties, node_off);
             if (fdt_exec_status == FDT_RET_GET_EMPTY)
             {
-                rt_free(dtb_node->properties);
-                dtb_node->properties = RT_NULL;
+                free(dtb_node->properties);
+                dtb_node->properties = NULL;
             }
             else if (fdt_exec_status != FDT_RET_GET_OK)
             {
                 return fdt_exec_status;
             }
 
-            fdt_exec_status = _fdt_get_dtb_nodes_list(dtb_node, dtb_node->child, dtb_node->path);
+            fdt_exec_status = _dtb_node_get_dtb_nodes_list(dtb_node, dtb_node->child, dtb_node->path);
             if (fdt_exec_status == FDT_RET_GET_EMPTY)
             {
-                rt_free(dtb_node->child);
-                dtb_node->child = RT_NULL;
+                free(dtb_node->child);
+                dtb_node->child = NULL;
             }
             else if (fdt_exec_status != FDT_RET_GET_OK)
             {
@@ -133,8 +147,8 @@ static rt_err_t _fdt_get_dtb_nodes_list(struct dtb_node *dtb_node_head, struct d
             node_off = fdt_next_subnode(current_fdt, node_off);
             if (node_off >= 0)
             {
-                dtb_node->sibling = (struct dtb_node *)rt_malloc(sizeof(struct dtb_node));
-                if (dtb_node->sibling == RT_NULL)
+                dtb_node->sibling = (struct dtb_node *)malloc(sizeof(struct dtb_node));
+                if (dtb_node->sibling == NULL)
                 {
                     return FDT_RET_NO_MEMORY;
                 }
@@ -150,12 +164,12 @@ static rt_err_t _fdt_get_dtb_nodes_list(struct dtb_node *dtb_node_head, struct d
     return FDT_RET_GET_OK;
 }
 
-struct dtb_node *fdt_get_dtb_list(void *fdt)
+struct dtb_node *dtb_node_get_dtb_list(void *fdt)
 {
     int root_off;
-    struct dtb_node *dtb_node_head = RT_NULL;
+    struct dtb_node *dtb_node_head = NULL;
 
-    if (fdt == RT_NULL)
+    if (fdt == NULL)
     {
         fdt_exec_status = FDT_RET_NO_LOADED;
         goto fail;
@@ -163,16 +177,16 @@ struct dtb_node *fdt_get_dtb_list(void *fdt)
 
     current_fdt = fdt;
 
-    if ((dtb_node_head = (struct dtb_node *)rt_malloc(sizeof(struct dtb_node))) == RT_NULL)
+    if ((dtb_node_head = (struct dtb_node *)malloc(sizeof(struct dtb_node))) == NULL)
     {
         fdt_exec_status = FDT_RET_NO_MEMORY;
         goto fail;
     }
 
-    if (paths_buf.ptr == RT_NULL)
+    if (paths_buf.ptr == NULL)
     {
-        paths_buf.ptr = rt_malloc(FDT_DTB_ALL_NODES_PATH_SIZE);
-        if (paths_buf.ptr == RT_NULL)
+        paths_buf.ptr = malloc(FDT_DTB_ALL_NODES_PATH_SIZE);
+        if (paths_buf.ptr == NULL)
         {
             fdt_exec_status = FDT_RET_NO_MEMORY;
             goto fail;
@@ -183,7 +197,7 @@ struct dtb_node *fdt_get_dtb_list(void *fdt)
 
     root_off = fdt_path_offset(fdt, "/");
 
-    if ((dtb_node_head->header = rt_malloc(sizeof(struct dtb_header))) == RT_NULL)
+    if ((dtb_node_head->header = malloc(sizeof(struct dtb_header))) == NULL)
     {
         fdt_exec_status = FDT_RET_NO_MEMORY;
         goto fail;
@@ -198,11 +212,11 @@ struct dtb_node *fdt_get_dtb_list(void *fdt)
         {
             int i;
             int memreserve_sz = dtb_node_head->header->memreserve_sz;
-            rt_uint32_t off_mem_rsvmap = fdt_off_mem_rsvmap(fdt);
+            uint32_t off_mem_rsvmap = fdt_off_mem_rsvmap(fdt);
             struct fdt_reserve_entry *rsvmap = (struct fdt_reserve_entry *)((char *)fdt + off_mem_rsvmap);
 
-            ((struct dtb_header *)dtb_node_head->header)->memreserve = rt_malloc(sizeof(struct dtb_memreserve) * memreserve_sz);
-            if (dtb_node_head->header->memreserve == RT_NULL)
+            ((struct dtb_header *)dtb_node_head->header)->memreserve = malloc(sizeof(struct dtb_memreserve) * memreserve_sz);
+            if (dtb_node_head->header->memreserve == NULL)
             {
                 fdt_exec_status = FDT_RET_NO_MEMORY;
                 goto fail;
@@ -215,112 +229,113 @@ struct dtb_node *fdt_get_dtb_list(void *fdt)
         }
         else
         {
-            ((struct dtb_header *)dtb_node_head->header)->memreserve = RT_NULL;
+            ((struct dtb_header *)dtb_node_head->header)->memreserve = NULL;
         }
     }
 
     dtb_node_head->path = paths_buf.ptr;
     *paths_buf.cur++ = '/';
     *paths_buf.cur++ = '\0';
-    dtb_node_head->parent = RT_NULL;
-    dtb_node_head->sibling = RT_NULL;
+    dtb_node_head->parent = NULL;
+    dtb_node_head->sibling = NULL;
 
     dtb_node_head->handle = fdt_get_phandle(fdt, root_off);
-    dtb_node_head->properties = (struct dtb_property *)rt_malloc(sizeof(struct dtb_property));
-    dtb_node_head->child = (struct dtb_node *)rt_malloc(sizeof(struct dtb_node));
+    dtb_node_head->properties = (struct dtb_property *)malloc(sizeof(struct dtb_property));
+    dtb_node_head->child = (struct dtb_node *)malloc(sizeof(struct dtb_node));
 
-    if (dtb_node_head->properties == RT_NULL || dtb_node_head->child == RT_NULL)
+    if (dtb_node_head->properties == NULL || dtb_node_head->child == NULL)
     {
         fdt_exec_status = FDT_RET_NO_MEMORY;
         goto fail;
     }
 
-    if ((fdt_exec_status = _fdt_get_dtb_properties_list(dtb_node_head->properties, root_off)) != FDT_RET_GET_OK)
+    if ((fdt_exec_status = _dtb_node_get_dtb_properties_list(dtb_node_head->properties, root_off)) != FDT_RET_GET_OK)
     {
         goto fail;
     }
 
-    if ((fdt_exec_status = _fdt_get_dtb_nodes_list(dtb_node_head, dtb_node_head->child, dtb_node_head->path)) != FDT_RET_GET_OK)
+    if ((fdt_exec_status = _dtb_node_get_dtb_nodes_list(dtb_node_head, dtb_node_head->child, dtb_node_head->path)) != FDT_RET_GET_OK)
     {
         goto fail;
     }
 
     /* paths_buf.ptr addr save in the dtb_node_head's path */
-    paths_buf.ptr = RT_NULL;
-    paths_buf.cur = RT_NULL;
+    paths_buf.ptr = NULL;
+    paths_buf.cur = NULL;
 
     return dtb_node_head;
 
 fail:
-    if (dtb_node_head != RT_NULL)
+    if (dtb_node_head != NULL)
     {
-        fdt_free_dtb_list(dtb_node_head);
+        dtb_node_free_dtb_list(dtb_node_head);
     }
 
-    return RT_NULL;
+    return NULL;
 }
 
-static void _fdt_free_dtb_node(struct dtb_node *dtb_node)
+static void _dtb_node_free_dtb_node(struct dtb_node *dtb_node)
 {
     struct dtb_node *dtb_node_last;
     struct dtb_property *dtb_property;
     struct dtb_property *dtb_property_last;
 
-    while (dtb_node != RT_NULL)
+    while (dtb_node != NULL)
     {
         dtb_property = dtb_node->properties;
-        while (dtb_property != RT_NULL)
+        while (dtb_property != NULL)
         {
             dtb_property_last = dtb_property;
             dtb_property = dtb_property->next;
-            rt_free(dtb_property_last);
+            free(dtb_property_last);
         }
 
-        _fdt_free_dtb_node(dtb_node->child);
+        _dtb_node_free_dtb_node(dtb_node->child);
 
         dtb_node_last = dtb_node;
         dtb_node = dtb_node->sibling;
-        rt_free(dtb_node_last);
+        free(dtb_node_last);
     }
 }
 
-void fdt_free_dtb_list(struct dtb_node *dtb_node_head)
+void dtb_node_free_dtb_list(struct dtb_node *dtb_node_head)
 {
-    if (dtb_node_head == RT_NULL)
+    if (dtb_node_head == NULL)
     {
         return;
     }
 
     /* only root node can free all path buffer */
-    if (dtb_node_head->parent == RT_NULL || (dtb_node_head->path != RT_NULL && !rt_strcmp(dtb_node_head->path, "/")))
+    if (dtb_node_head->parent == NULL || (dtb_node_head->path != NULL && !strcmp(dtb_node_head->path, "/")))
     {
-        if (dtb_node_head->path != RT_NULL)
+        if (dtb_node_head->path != NULL)
         {
-            rt_free((void *)dtb_node_head->path);
+            free((void *)dtb_node_head->path);
         }
-        if (dtb_node_head->header != RT_NULL)
+        if (dtb_node_head->header != NULL)
         {
-            if (dtb_node_head->header->memreserve != RT_NULL)
+            if (dtb_node_head->header->memreserve != NULL)
             {
-                rt_free((void *)dtb_node_head->header->memreserve);
+                free((void *)dtb_node_head->header->memreserve);
             }
-            rt_free((void *)dtb_node_head->header);
+            free((void *)dtb_node_head->header);
         }
     }
 
-    _fdt_free_dtb_node(dtb_node_head);
+    _dtb_node_free_dtb_node(dtb_node_head);
 }
 
-static void _fdt_printf_depth(int depth)
+static void _dtb_node_printf_depth(int depth)
 {
     int i = depth;
     while (i --> 0)
     {
-        rt_kputs("\t");
+        puts("\t");
     }
 }
 
-static rt_bool_t _fdt_test_string_list(const void *value, int size)
+//static bool _dtb_node_test_string_list(const void *value, int size)
+bool _dtb_node_test_string_list(const void *value, int size)
 {
     const char *str = value;
     const char *str_start, *str_end;
@@ -361,43 +376,43 @@ static rt_bool_t _fdt_test_string_list(const void *value, int size)
     return RT_TRUE;
 }
 
-static void _fdt_printf_dtb_node_info(struct dtb_node *dtb_node)
+static void _dtb_node_printf_dtb_node_info(struct dtb_node *dtb_node)
 {
     static int depth = 0;
     struct dtb_property *dtb_property;
 
-    while (dtb_node != RT_NULL)
+    while (dtb_node != NULL)
     {
-        rt_kputs("\n");
-        _fdt_printf_depth(depth);
-        rt_kputs(dtb_node->name);
-        rt_kputs(" {\n");
+        puts("\n");
+        _dtb_node_printf_depth(depth);
+        puts(dtb_node->name);
+        puts(" {\n");
         ++depth;
 
         dtb_property = dtb_node->properties;
-        while (dtb_property != RT_NULL)
+        while (dtb_property != NULL)
         {
-            _fdt_printf_depth(depth);
+            _dtb_node_printf_depth(depth);
 
-            rt_kputs(dtb_property->name);
+            puts(dtb_property->name);
 
             if (dtb_property->size > 0)
             {
                 int size = dtb_property->size;
                 char *value = dtb_property->value;
 
-                rt_kputs(" = ");
-                if (_fdt_test_string_list(value, size) == RT_TRUE)
+                puts(" = ");
+                if (_dtb_node_test_string_list(value, size) == RT_TRUE)
                 {
                     /* print string list */
                     char *str = value;
                     do
                     {
-                        rt_kprintf("\"%s\"", str);
-                        str += rt_strlen(str) + 1;
-                        rt_kputs(", ");
+                        printf("\"%s\"", str);
+                        str += strlen(str) + 1;
+                        puts(", ");
                     } while (str < value + size);
-                    rt_kputs("\b\b");
+                    puts("\b\b");
                 }
                 else if ((size % 4) == 0)
                 {
@@ -405,116 +420,108 @@ static void _fdt_printf_dtb_node_info(struct dtb_node *dtb_node)
                     int i;
                     fdt32_t *cell = (fdt32_t *)value;
 
-                    rt_kputs("<");
+                    puts("<");
                     for (i = 0, size /= 4; i < size; ++i)
                     {
-                        rt_kprintf("0x%x ", fdt32_to_cpu(cell[i]));
+                        printf("0x%x ", fdt32_to_cpu(cell[i]));
                     }
-                    rt_kputs("\b>");
+                    puts("\b>");
                 }
                 else
                 {
                     /* print bytes array */
                     int i;
-                    rt_uint8_t *byte = (rt_uint8_t *)value;
+                    uint8_t *byte = (uint8_t *)value;
 
-                    rt_kputs("[");
+                    puts("[");
                     for (i = 0; i < size; ++i)
                     {
-                       rt_kprintf("%02x ", *byte++);
+                       printf("%02x ", *byte++);
                     }
-                    rt_kputs("\b]");
+                    puts("\b]");
                 }
             }
-            rt_kputs(";\n");
+            puts(";\n");
             dtb_property = dtb_property->next;
         }
 
-        _fdt_printf_dtb_node_info(dtb_node->child);
+        _dtb_node_printf_dtb_node_info(dtb_node->child);
         dtb_node = dtb_node->sibling;
 
         --depth;
-        _fdt_printf_depth(depth);
-        rt_kputs("};\n");
+        _dtb_node_printf_depth(depth);
+        puts("};\n");
     }
 }
 
-void fdt_get_dts_dump(struct dtb_node *dtb_node_head)
+void dtb_node_get_dts_dump(struct dtb_node *dtb_node_head)
 {
-    if (dtb_node_head != RT_NULL)
+    if (dtb_node_head != NULL)
     {
         int i = dtb_node_head->header->memreserve_sz;
 
-        rt_kputs("/dts-v1/;\n");
-
+        puts("/dts-v1/;\n");
         while (i --> 0)
         {
-            if (IN_64BITS_MODE)
-            {
-                rt_kprintf("\n/memreserve/\t0x%016x 0x%016x;", dtb_node_head->header->memreserve[i].address, dtb_node_head->header->memreserve[i].size);
-            }
-            else
-            {
-                rt_kprintf("\n/memreserve/\t0x%08x%08x 0x%08x%08x;", dtb_node_head->header->memreserve[i].address, dtb_node_head->header->memreserve[i].size);
-            }
+            printf("\n/memreserve/\t0x%lx 0x%zx;", dtb_node_head->header->memreserve[i].address, dtb_node_head->header->memreserve[i].size);
         }
 
-        _fdt_printf_dtb_node_info(dtb_node_head);
+        _dtb_node_printf_dtb_node_info(dtb_node_head);
     }
 }
 
-static void _fdt_get_enum_dtb_node(struct dtb_node *dtb_node, void (callback(struct dtb_node *dtb_node)))
+static void _dtb_node_get_enum_dtb_node(struct dtb_node *dtb_node, void (callback(struct dtb_node *dtb_node)))
 {
-    while (dtb_node != RT_NULL)
+    while (dtb_node != NULL)
     {
         callback(dtb_node);
-        _fdt_get_enum_dtb_node(dtb_node->child, callback);
+        _dtb_node_get_enum_dtb_node(dtb_node->child, callback);
         dtb_node = dtb_node->sibling;
     }
 }
 
-void fdt_get_enum_dtb_node(struct dtb_node *dtb_node_head, void (callback(struct dtb_node *dtb_node)))
+void dtb_node_get_enum_dtb_node(struct dtb_node *dtb_node_head, void (callback(struct dtb_node *dtb_node)))
 {
-    if (dtb_node_head == RT_NULL || callback == RT_NULL)
+    if (dtb_node_head == NULL || callback == NULL)
     {
         return;
     }
 
-    _fdt_get_enum_dtb_node(dtb_node_head, callback);
+    _dtb_node_get_enum_dtb_node(dtb_node_head, callback);
 }
 
-struct dtb_node *fdt_get_dtb_node_by_name_DFS(struct dtb_node *dtb_node, const char *nodename)
+struct dtb_node *dtb_node_get_dtb_node_by_name_DFS(struct dtb_node *dtb_node, const char *nodename)
 {
     struct dtb_node *dtb_node_child;
 
-    while (dtb_node != RT_NULL)
+    while (dtb_node != NULL)
     {
-        if (!rt_strcmp(nodename, dtb_node->name))
+        if (!strcmp(nodename, dtb_node->name))
         {
             return dtb_node;
         }
 
-        dtb_node_child = fdt_get_dtb_node_by_name_DFS(dtb_node->child, nodename);
+        dtb_node_child = dtb_node_get_dtb_node_by_name_DFS(dtb_node->child, nodename);
 
-        if (dtb_node_child != RT_NULL)
+        if (dtb_node_child != NULL)
         {
             return dtb_node_child;
         }
         dtb_node = dtb_node->sibling;
     }
 
-    return RT_NULL;
+    return NULL;
 }
 
-struct dtb_node *fdt_get_dtb_node_by_name_BFS(struct dtb_node *dtb_node, const char *nodename)
+struct dtb_node *dtb_node_get_dtb_node_by_name_BFS(struct dtb_node *dtb_node, const char *nodename)
 {
-    if (dtb_node != RT_NULL)
+    if (dtb_node != NULL)
     {
         struct dtb_node *dtb_node_child, *dtb_node_head = dtb_node;
 
-        while (dtb_node != RT_NULL)
+        while (dtb_node != NULL)
         {
-            if (!rt_strcmp(nodename, dtb_node->name))
+            if (!strcmp(nodename, dtb_node->name))
             {
                 return dtb_node;
             }
@@ -523,11 +530,11 @@ struct dtb_node *fdt_get_dtb_node_by_name_BFS(struct dtb_node *dtb_node, const c
 
         dtb_node = dtb_node_head;
 
-        while (dtb_node != RT_NULL)
+        while (dtb_node != NULL)
         {
-            dtb_node_child = fdt_get_dtb_node_by_name_BFS(dtb_node->child, nodename);
+            dtb_node_child = dtb_node_get_dtb_node_by_name_BFS(dtb_node->child, nodename);
 
-            if (dtb_node_child != RT_NULL)
+            if (dtb_node_child != NULL)
             {
                 return dtb_node_child;
             }
@@ -535,19 +542,19 @@ struct dtb_node *fdt_get_dtb_node_by_name_BFS(struct dtb_node *dtb_node, const c
         }
     }
 
-    return RT_NULL;
+    return NULL;
 }
 
-struct dtb_node *fdt_get_dtb_node_by_path(struct dtb_node *dtb_node, const char *pathname)
+struct dtb_node *dtb_node_get_dtb_node_by_path(struct dtb_node *dtb_node, const char *pathname)
 {
     int i = 0;
     char *node_name;
     char *pathname_clone;
     int pathname_sz;
 
-    if (pathname == RT_NULL || dtb_node == RT_NULL)
+    if (pathname == NULL || dtb_node == NULL)
     {
-        return RT_NULL;
+        return NULL;
     }
 
     /* skip '/' */
@@ -557,18 +564,18 @@ struct dtb_node *fdt_get_dtb_node_by_path(struct dtb_node *dtb_node, const char 
     }
 
     /* root not have sibling, so skip */
-    if (dtb_node->parent == RT_NULL || !rt_strcmp(dtb_node->path, "/"))
+    if (dtb_node->parent == NULL || !strcmp(dtb_node->path, "/"))
     {
         dtb_node = dtb_node->child;
     }
 
-    pathname_sz = rt_strlen(pathname) + 1;
-    pathname_clone = rt_malloc(pathname_sz);
-    if (pathname_clone == RT_NULL)
+    pathname_sz = strlen(pathname) + 1;
+    pathname_clone = malloc(pathname_sz);
+    if (pathname_clone == NULL)
     {
-        return RT_NULL;
+        return NULL;
     }
-    rt_strncpy(pathname_clone, pathname, pathname_sz);
+    strncpy(pathname_clone, pathname, pathname_sz);
     node_name = pathname_clone;
 
     while (pathname_clone[i])
@@ -578,18 +585,18 @@ struct dtb_node *fdt_get_dtb_node_by_path(struct dtb_node *dtb_node, const char 
             /* set an end of name that can used to strcmp */
             pathname_clone[i] = '\0';
 
-            while (dtb_node != RT_NULL)
+            while (dtb_node != NULL)
             {
-                if (!rt_strcmp(dtb_node->name, node_name))
+                if (!strcmp(dtb_node->name, node_name))
                 {
                     break;
                 }
                 dtb_node = dtb_node->sibling;
             }
-            if (dtb_node == RT_NULL)
+            if (dtb_node == NULL)
             {
-                rt_free(pathname_clone);
-                return RT_NULL;
+                free(pathname_clone);
+                return NULL;
             }
             dtb_node = dtb_node->child;
             node_name = &pathname_clone[i + 1];
@@ -603,50 +610,50 @@ struct dtb_node *fdt_get_dtb_node_by_path(struct dtb_node *dtb_node, const char 
      *      (&pathname_clone[i] - node_name) is the node_name's length
      */
     node_name = &((char *)pathname)[(pathname_sz - 1) - (&pathname_clone[i] - node_name)];
-    rt_free(pathname_clone);
+    free(pathname_clone);
 
-    while (dtb_node != RT_NULL)
+    while (dtb_node != NULL)
     {
-        if (!rt_strcmp(dtb_node->name, node_name))
+        if (!strcmp(dtb_node->name, node_name))
         {
             return dtb_node;
         }
         dtb_node = dtb_node->sibling;
     }
 
-    return RT_NULL;
+    return NULL;
 }
 
-struct dtb_node *fdt_get_dtb_node_by_phandle_DFS(struct dtb_node *dtb_node, phandle handle)
+struct dtb_node *dtb_node_get_dtb_node_by_phandle_DFS(struct dtb_node *dtb_node, phandle handle)
 {
     struct dtb_node *dtb_node_child;
 
-    while (dtb_node != RT_NULL)
+    while (dtb_node != NULL)
     {
         if (dtb_node->handle == handle)
         {
             return dtb_node;
         }
 
-        dtb_node_child = fdt_get_dtb_node_by_phandle_DFS(dtb_node->child, handle);
+        dtb_node_child = dtb_node_get_dtb_node_by_phandle_DFS(dtb_node->child, handle);
 
-        if (dtb_node_child != RT_NULL)
+        if (dtb_node_child != NULL)
         {
             return dtb_node_child;
         }
         dtb_node = dtb_node->sibling;
     }
 
-    return RT_NULL;
+    return NULL;
 }
 
-struct dtb_node *fdt_get_dtb_node_by_phandle_BFS(struct dtb_node *dtb_node, phandle handle)
+struct dtb_node *dtb_node_get_dtb_node_by_phandle_BFS(struct dtb_node *dtb_node, phandle handle)
 {
-    if (dtb_node != RT_NULL)
+    if (dtb_node != NULL)
     {
         struct dtb_node *dtb_node_child, *dtb_node_head = dtb_node;
 
-        while (dtb_node != RT_NULL)
+        while (dtb_node != NULL)
         {
             if (dtb_node->handle == handle)
             {
@@ -657,11 +664,11 @@ struct dtb_node *fdt_get_dtb_node_by_phandle_BFS(struct dtb_node *dtb_node, phan
 
         dtb_node = dtb_node_head;
 
-        while (dtb_node != RT_NULL)
+        while (dtb_node != NULL)
         {
-            dtb_node_child = fdt_get_dtb_node_by_phandle_BFS(dtb_node->child, handle);
+            dtb_node_child = dtb_node_get_dtb_node_by_phandle_BFS(dtb_node->child, handle);
 
-            if (dtb_node_child != RT_NULL)
+            if (dtb_node_child != NULL)
             {
                 return dtb_node_child;
             }
@@ -669,28 +676,28 @@ struct dtb_node *fdt_get_dtb_node_by_phandle_BFS(struct dtb_node *dtb_node, phan
         }
     }
 
-    return RT_NULL;
+    return NULL;
 }
 
-void fdt_get_dtb_node_cells(struct dtb_node *dtb_node, int *addr_cells, int *size_cells)
+void dtb_node_get_dtb_node_cells(struct dtb_node *dtb_node, int *addr_cells, int *size_cells)
 {
-    if (dtb_node != RT_NULL && addr_cells != RT_NULL && size_cells != RT_NULL)
+    if (dtb_node != NULL && addr_cells != NULL && size_cells != NULL)
     {
         struct dtb_property *dtb_property;
         *addr_cells = -1;
         *size_cells = -1;
 
         /* if couldn't found, check parent */
-        while ((dtb_node = dtb_node->parent) != RT_NULL)
+        while ((dtb_node = dtb_node->parent) != NULL)
         {
             dtb_property = dtb_node->properties;
-            while (dtb_property != RT_NULL)
+            while (dtb_property != NULL)
             {
-                if (!rt_strcmp(dtb_property->name, "#address-cells"))
+                if (!strcmp(dtb_property->name, "#address-cells"))
                 {
                     *addr_cells = fdt32_to_cpu(*(int *)dtb_property->value);
                 }
-                else if (!rt_strcmp(dtb_property->name, "#size-cells"))
+                else if (!strcmp(dtb_property->name, "#size-cells"))
                 {
                     *size_cells = fdt32_to_cpu(*(int *)dtb_property->value);
                 }
@@ -713,38 +720,15 @@ void fdt_get_dtb_node_cells(struct dtb_node *dtb_node, int *addr_cells, int *siz
     }
 }
 
-void *fdt_get_dtb_node_property(struct dtb_node *dtb_node, const char *property_name, rt_size_t *property_size)
+struct dtb_memreserve *dtb_node_get_dtb_memreserve(struct dtb_node *dtb_node, int *memreserve_size)
 {
-    if (dtb_node != RT_NULL && property_name != RT_NULL)
-    {
-        struct dtb_property *dtb_property = dtb_node->properties;
-
-        while (dtb_property != RT_NULL)
-        {
-            if (!rt_strcmp(dtb_property->name, property_name))
-            {
-                if (property_size != RT_NULL)
-                {
-                    *property_size = dtb_property->size;
-                }
-                return dtb_property->value;
-            }
-            dtb_property = dtb_property->next;
-        }
-    }
-
-    return RT_NULL;
-}
-
-struct dtb_memreserve *fdt_get_dtb_memreserve(struct dtb_node *dtb_node, int *memreserve_size)
-{
-    if (dtb_node != RT_NULL && memreserve_size != RT_NULL)
+    if (dtb_node != NULL && memreserve_size != NULL)
     {
         struct dtb_node *dtb_node_root = dtb_node;
 
-        while (dtb_node_root != RT_NULL)
+        while (dtb_node_root != NULL)
         {
-            if (!rt_strcmp(dtb_node_root->path, "/"))
+            if (!strcmp(dtb_node_root->path, "/"))
             {
                 break;
             }
@@ -755,17 +739,17 @@ struct dtb_memreserve *fdt_get_dtb_memreserve(struct dtb_node *dtb_node, int *me
 
         return dtb_node_root->header->memreserve;
     }
-    return RT_NULL;
+    return NULL;
 }
 
-rt_bool_t fdt_get_dtb_node_status(struct dtb_node *dtb_node)
+bool dtb_node_get_dtb_node_status(const struct dtb_node *dtb_node)
 {
-    if (dtb_node != RT_NULL)
+    if (dtb_node != NULL)
     {
-        char *status = fdt_get_dtb_node_property(dtb_node, "status", RT_NULL);
-        if (status != RT_NULL)
+        char *status = dtb_node_get_dtb_node_property_value(dtb_node, "status", NULL);
+        if (status != NULL)
         {
-            return (!rt_strcmp(status, "okay") || !rt_strcmp(status, "ok")) ? RT_TRUE : RT_FALSE;
+            return (!strcmp(status, "okay") || !strcmp(status, "ok")) ? RT_TRUE : RT_FALSE;
         }
 
         return RT_TRUE;
@@ -774,34 +758,34 @@ rt_bool_t fdt_get_dtb_node_status(struct dtb_node *dtb_node)
     return RT_FALSE;
 }
 
-rt_bool_t fdt_get_dtb_node_compatible_match(struct dtb_node *dtb_node, char **compatibles)
+bool dtb_node_get_dtb_node_compatible_match(const struct dtb_node *dtb_node, const char *compatibles)
 {
-    if (dtb_node != RT_NULL)
+    if (dtb_node != NULL)
     {
-        while (*compatibles != RT_NULL)
+        if (compatibles != NULL)
         {
             char *str_ptr;
-            rt_size_t prop_sz;
+            int prop_sz;
+
             for_each_property_string(dtb_node, "compatible", str_ptr, prop_sz)
             {
-                if (!rt_strcmp(*compatibles, str_ptr))
+                if (!strcmp(compatibles, str_ptr))
                 {
                     return RT_TRUE;
                 }
             }
-            ++compatibles;
         }
     }
 
     return RT_FALSE;
 }
 
-char *fdt_get_dtb_string_list_value(void *value, int size, int index)
+char *dtb_node_get_dtb_string_list_value(void *value, int size, int index)
 {
     int i = 0;
     char *str = value;
 
-    if (str != RT_NULL)
+    if (str != NULL)
     {
         do
         {
@@ -809,35 +793,35 @@ char *fdt_get_dtb_string_list_value(void *value, int size, int index)
             {
                 return str;
             }
-            str += rt_strlen(str) + 1;
+            str += strlen(str) + 1;
         } while (str < (char *)value + size);
     }
 
-    return RT_NULL;
+    return NULL;
 }
 
-char *fdt_get_dtb_string_list_value_next(void *value, void *end)
+char *dtb_node_get_dtb_string_list_value_next(void *value, void *end)
 {
     char *str = value;
 
-    if (str != RT_NULL)
+    if (str != NULL)
     {
-        str += rt_strlen(str) + 1;
+        str += strlen(str) + 1;
         if (str < (char *)end)
         {
             return str;
         }
     }
 
-    return RT_NULL;
+    return NULL;
 }
 
-rt_uint32_t fdt_get_dtb_cell_value(void *value)
+uint32_t dtb_node_get_dtb_cell_value(void *value)
 {
     return fdt32_to_cpu(*(fdt32_t *)value);
 }
 
-rt_uint8_t fdt_get_dtb_byte_value(void *value)
+uint8_t dtb_node_get_dtb_byte_value(void *value)
 {
-    return *(rt_uint8_t *)value;
+    return *(uint8_t *)value;
 }

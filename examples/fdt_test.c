@@ -1,18 +1,18 @@
 #include <rtthread.h>
-#include <fdt.h>
+#include <fdt_node.h>
 
 int fdt_test()
 {
     void *fdt;
 
-    if ((fdt = fdt_load_from_fs("vexpress-v2p-ca9.dtb")) != RT_NULL)
+    if ((fdt = dtb_node_load_from_fs("vexpress-v2p-ca9.dtb")) != RT_NULL)
     {
-        struct dtb_node *dtb_node_list =  fdt_get_dtb_list(fdt);
+        struct dtb_node *dtb_node_list =  dtb_node_get_dtb_list(fdt);
         if (dtb_node_list != RT_NULL)
         {
-            struct dtb_node *serial0 = fdt_get_dtb_node_by_path(dtb_node_list, "/smb@4000000/motherboard/iofpga@7,00000000/uart@9000");
-            struct dtb_node *cpu = fdt_get_dtb_node_by_path(dtb_node_list, "/cpus");
-            struct dtb_node *user1 = fdt_get_dtb_node_by_path(dtb_node_list, "/smb@4000000/motherboard/leds/user1");
+            struct dtb_node *serial0 = dtb_node_get_dtb_node_by_path(dtb_node_list, "/smb@4000000/motherboard/iofpga@7,00000000/uart@9000");
+            struct dtb_node *cpu = dtb_node_get_dtb_node_by_path(dtb_node_list, "/cpus");
+            struct dtb_node *user1 = dtb_node_get_dtb_node_by_path(dtb_node_list, "/smb@4000000/motherboard/leds/user1");
 
             if (serial0 != RT_NULL)
             {
@@ -54,32 +54,32 @@ int fdt_test()
             {
                 struct dtb_node *user = user1;
 
-                rt_kprintf("\nname = %s, lable = %s\n", user1->name, fdt_get_dtb_node_property(user1, "label", RT_NULL));
+                rt_kprintf("\nname = %s, lable = %s\n", user1->name, dtb_node_get_dtb_node_property(user1, "label", RT_NULL));
 
                 for_each_node_sibling(user)
                 {
-                    rt_kprintf("name = %s, lable = %s\n", user->name, fdt_get_dtb_node_property(user, "label", RT_NULL));
+                    rt_kprintf("name = %s, lable = %s\n", user->name, dtb_node_get_dtb_node_property(user, "label", RT_NULL));
                 }
             }
         }
-        fdt_free_dtb_list(dtb_node_list);
+        dtb_node_free_dtb_list(dtb_node_list);
     }
 
-    if ((fdt = fdt_load_from_fs("bcm2711-rpi-4-b.dtb")) != RT_NULL)
+    if ((fdt = dtb_node_load_from_fs("bcm2711-rpi-4-b.dtb")) != RT_NULL)
     {
-        struct dtb_node *dtb_node_list =  fdt_get_dtb_list(fdt);
+        struct dtb_node *dtb_node_list =  dtb_node_get_dtb_list(fdt);
         if (dtb_node_list != RT_NULL)
         {
             struct dtb_node *bt_pins;
             int memreserve_size;
             struct dtb_memreserve *memreserve;
 
-            bt_pins = fdt_get_dtb_node_by_name_DFS(dtb_node_list, "bt_pins");
-            bt_pins = fdt_get_dtb_node_by_name_BFS(dtb_node_list, bt_pins->name);
-            bt_pins = fdt_get_dtb_node_by_phandle_DFS(dtb_node_list, bt_pins->handle);
-            bt_pins = fdt_get_dtb_node_by_phandle_BFS(dtb_node_list, bt_pins->handle);
+            bt_pins = dtb_node_get_dtb_node_by_name_DFS(dtb_node_list, "bt_pins");
+            bt_pins = dtb_node_get_dtb_node_by_name_BFS(dtb_node_list, bt_pins->name);
+            bt_pins = dtb_node_get_dtb_node_by_phandle_DFS(dtb_node_list, bt_pins->handle);
+            bt_pins = dtb_node_get_dtb_node_by_phandle_BFS(dtb_node_list, bt_pins->handle);
 
-            memreserve = fdt_get_dtb_memreserve(bt_pins, &memreserve_size);
+            memreserve = dtb_node_get_dtb_memreserve(bt_pins, &memreserve_size);
             if (memreserve_size > 0)
             {
                 int i;
@@ -115,7 +115,7 @@ int fdt_test()
                 rt_kputs("\b]\n");
             }
         }
-        fdt_free_dtb_list(dtb_node_list);
+        dtb_node_free_dtb_list(dtb_node_list);
     }
     return 0;
 }
