@@ -6,7 +6,6 @@
 #include "dtb_node.h"
 #include "dtb_head.h"
 
-#define FDT_DEFAULT_PATH "fdt/examples/bsta1000-evb.dtb"
 static void *fdt = NULL;
 static struct dtb_node *dtb_node_list = NULL;
 void *get_fdt_blob(void)
