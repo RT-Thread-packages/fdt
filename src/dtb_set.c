@@ -1,9 +1,21 @@
+/*
+ * Copyright (c) 2006-2022, RT-Thread Development Team
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 #include "libfdt/libfdt.h"
-#include "fdt.h"
+#include "dtb_node.h"
 
-static rt_off_t fdt_find_and_add_subnode(void *fdt, char* name)
+#include <string.h>
+#include <stdbool.h>
+#include <stdlib.h>
+
+#define RT_TRUE     true
+#define RT_FALSE    false
+
+static off_t dtb_node_find_and_add_subnode(void *fdt, char* name)
 {
-    rt_off_t chosen_offset = 0;
+    off_t chosen_offset = 0;
 
     chosen_offset = fdt_subnode_offset(fdt, 0, name);
 
@@ -15,18 +27,18 @@ static rt_off_t fdt_find_and_add_subnode(void *fdt, char* name)
     return chosen_offset;
 }
 
-rt_size_t fdt_set_linux_cmdline(void *fdt, char *cmdline)
+size_t dtb_node_set_linux_cmdline(void *fdt, char *cmdline)
 {
-    rt_off_t chosen_offset;
-    rt_size_t cmdline_size;
+    off_t chosen_offset;
+    size_t cmdline_size;
 
-    if (cmdline == RT_NULL || fdt == RT_NULL)
+    if (cmdline == NULL || fdt == NULL)
     {
         goto end;
     }
 
-    chosen_offset = fdt_find_and_add_subnode(fdt, "chosen");
-    cmdline_size = rt_strlen(cmdline);
+    chosen_offset = dtb_node_find_and_add_subnode(fdt, "chosen");
+    cmdline_size = strlen(cmdline);
 
     /* install bootargs */
     if (chosen_offset >= 0 || chosen_offset == -FDT_ERR_EXISTS)
@@ -42,18 +54,18 @@ end:
     return fdt_totalsize(fdt);
 }
 
-rt_size_t fdt_set_linux_initrd(void *fdt, rt_uint64_t initrd_addr, rt_size_t initrd_size)
+size_t dtb_node_set_linux_initrd(void *fdt, uint64_t initrd_addr, size_t initrd_size)
 {
-    rt_uint64_t addr, size_ptr;
-    rt_off_t chosen_offset;
+    uint64_t addr, size_ptr;
+    off_t chosen_offset;
     int i;
 
-    if (fdt == RT_NULL)
+    if (fdt == NULL)
     {
         goto end;
     }
 
-    chosen_offset = fdt_find_and_add_subnode(fdt, "chosen");
+    chosen_offset = dtb_node_find_and_add_subnode(fdt, "chosen");
 
     /* update the entry */
     for (i = fdt_num_mem_rsv(fdt) - 1; i >= 0; --i)
@@ -98,11 +110,11 @@ end:
     return fdt_totalsize(fdt);
 }
 
-rt_size_t fdt_set_dtb_property(void *fdt, char *pathname, char *property_name, rt_uint32_t *cells, rt_size_t cells_size)
+size_t dtb_node_set_dtb_property(void *fdt, char *pathname, char *property_name, uint32_t *cells, size_t cells_size)
 {
     int node_off;
 
-    if (fdt == RT_NULL)
+    if (fdt == NULL)
     {
         goto end;
     }
@@ -118,9 +130,9 @@ end:
     return fdt_totalsize(fdt);
 }
 
-rt_size_t fdt_add_dtb_memreserve(void *fdt, rt_uint64_t address, rt_uint64_t size)
+size_t dtb_node_add_dtb_memreserve(void *fdt, uint64_t address, uint64_t size)
 {
-    if (fdt == RT_NULL)
+    if (fdt == NULL)
     {
         goto end;
     }
@@ -131,14 +143,14 @@ end:
     return fdt_totalsize(fdt);
 }
 
-rt_size_t fdt_del_dtb_memreserve(void *fdt, rt_uint64_t address)
+size_t dtb_node_del_dtb_memreserve(void *fdt, uint64_t address)
 {
     int i;
     int num_mem_rsvmap;
-    rt_uint32_t off_mem_rsvmap;
+    uint32_t off_mem_rsvmap;
     struct fdt_reserve_entry *rsvmap;
 
-    if (fdt == RT_NULL)
+    if (fdt == NULL)
     {
         goto end;
     }

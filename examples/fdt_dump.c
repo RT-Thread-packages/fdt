@@ -1,5 +1,5 @@
 #include <rtthread.h>
-#include <fdt.h>
+#include <dtb_node.h>
 
 int fdt_dump(int argc, char** argv)
 {
@@ -10,7 +10,7 @@ int fdt_dump(int argc, char** argv)
         struct dtb_node *dtb_node_list = fdt_get_dtb_list(fdt);
         if (dtb_node_list != RT_NULL)
         {
-            fdt_get_dts_dump(dtb_node_list);
+            dtb_node_get_dts_dump(dtb_node_list);
         }
         /* dtb_node_list will free on here */
         fdt_free_dtb_list(dtb_node_list);

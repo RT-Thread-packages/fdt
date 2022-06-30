@@ -3,7 +3,7 @@ from building import *
 cwd     = GetCurrentDir()
 src     = Glob('*.c')
 list    = os.listdir(cwd)
-CPPPATH = [cwd + '/../inc']
+CPPPATH = [cwd + '/../inc' , cwd + '/libfdt']
 objs    = []
 
 group = DefineGroup('FDT', src, depend = ['PKG_USING_FDT'], CPPPATH = CPPPATH)

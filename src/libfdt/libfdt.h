@@ -153,6 +153,30 @@ static inline void *fdt_offset_ptr_w(void *fdt, int offset, int checklen)
 
 uint32_t fdt_next_tag(const void *fdt, int offset, int *nextoffset);
 
+static inline void fdt32_st(void *property, uint32_t value)
+{
+    uint8_t *bp = (uint8_t *)property;
+
+    bp[0] = value >> 24;
+    bp[1] = (value >> 16) & 0xff;
+    bp[2] = (value >> 8) & 0xff;
+    bp[3] = value & 0xff;
+}
+
+static inline void fdt64_st(void *property, uint64_t value)
+{
+    uint8_t *bp = (uint8_t *)property;
+
+    bp[0] = value >> 56;
+    bp[1] = (value >> 48) & 0xff;
+    bp[2] = (value >> 40) & 0xff;
+    bp[3] = (value >> 32) & 0xff;
+    bp[4] = (value >> 24) & 0xff;
+    bp[5] = (value >> 16) & 0xff;
+    bp[6] = (value >> 8) & 0xff;
+    bp[7] = value & 0xff;
+}
+
 /**********************************************************************/
 /* Traversal functions                                                */
 /**********************************************************************/
